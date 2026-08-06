@@ -1,0 +1,115 @@
+# vehicle.yaml: vdemu responder.py configuration file
+#
+# License:
+#   Apache License, Version 2.0
+# History:
+#   * 2026/08/06 v0.1 Initial version
+# Author:
+#   Masanori Itoh <masanori.itoh@gmail.com>
+# TODO:
+#   * Support DoIP
+#   * Support J1979 (Legacy OBD)
+database:
+  sids:
+    - 0x22
+  dids:
+      0xF404:
+        name: 'ENGINE_LOAD'
+        example: 35
+        unit: '%'
+      0xF40C:
+        name: 'RPM'
+        example: 2345
+      0xF40D:
+        name: 'SPEED'
+        example: 75
+      0xF411:
+        name: 'THROTTLE'
+        example: 163
+        unit: '%'
+        # 64(%) is converted as 64 * 255 / 100 = 163
+      0xF446:
+        name: 'AMBIENT_TEMP'
+        example: 28
+      #
+      0xF802:
+        name: 'VIN'
+        example: 'VIN12345678901234'
+        # Note: F801 is WWH-OBD(ISO 27145), F190 is standard UDS VIN (ISO 14229)
+      0xF80A:
+        name: 'ECU_NAME'
+        example: 'AGL_IVI'
+      0xF810:
+        name: 'Protocol Identification'
+        note: 'Used to check if the target supports J1979-2 or not'
+      #0xF186:
+      #  name: 'Active'
+      #  example: ''
+      0xF187:
+        name: 'Vehicle Manufacturer ECU Hardware Number'
+        example: 'RaspberryPi5'
+      0xF188:
+        name: 'Vehicle Manufacturer ECU Software Number'
+        example: 'AGL(qemuarm64)'
+      0xF189:
+        name: 'Vehicle Manufacturer ECU Software Version Number'
+        example: '21.0.2'
+      0xF190:
+        name: 'VIN'
+        example: 'VIN12345678901234'
+
+vehicle:
+  mode: 'J1979-2'
+  vin: 'VIN12345678901234' # read by CANID: 0x7DF SID: 0x22 DID: 0xF802
+  ecus:
+    0x7E0:
+      ecu_name: 'EngineECU' # read by DID: 0xF80A
+      data:
+        0x22:
+          0xF189: '1.0.0'
+          0xF404: 35
+  #        name: 'ENGINE_LOAD'
+          0xF40C: 2345
+  #        name: 'RPM'
+          0xF40D: 75
+  #        name: 'SPEED'
+          0xF411: 65
+  #        name: 'THROTTLE'
+          0xF446: 35
+  #        name: 'AMBIENT_TEMP'
+        0x19: # DTCs
+          - 0x012308 # P0123, Confirmed
+          - 0x020108 # P0201, Confirmed
+          - 0x030008 # P0300, Confirmed
+    0x7E4:
+      ecu_name: 'AGL_IVI'
+      data:
+        0x22:
+          0xF189: '21.0.2'
+  #        name: 'Vehicle Manufacturer ECU Software Version Number'
+    0x7E5:
+      ecu_name: 'AGL_IC'
+      data:
+        0x22:
+          0xF189: '21.91.0'
+    0x7E1:
+      ecu_name: 'TransmissionECU'
+      data:
+        0x22:
+          0xF189: '1.0.0'
+    0x7E2:
+      ecu_name: 'HybridECU'
+      data:
+        0x22:
+          0xF189: '1.0.0'
+    0x7E6:
+      ecu_name: 'DUMMY'
+      data:
+        0x22:
+          0xF189: '1.0.0'
+    0x7E3:
+      ecu_name: 'TCU/AGL_TELEMATICS'
+      data:
+        0x22:
+          0xF189: '1.0.0'
+  #        name: 'Vehicle Manufacturer ECU Software Version Number'
