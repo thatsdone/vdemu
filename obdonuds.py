@@ -188,6 +188,12 @@ def send_get_all_dtcs(socket):
         socket.send(bytes([0x19, 0x02, 0x0F]))
         rx_payload = socket.recv()
         print(dump_msg(rx_payload), '/', '%d DTCs' % (len(rx_payload[3:]) / 3))
+        count = int(len(rx_payload[3:]) / 3)
+        dtcs = list()
+        offset = 3
+        for i in range(0, count):
+            dtcs.append(int.from_bytes(rx_payload[offset+i*3:offset+(i*3)+3], 'big'))
+        return dtcs
     except TimeoutError:
         if args.debug:
             print(time.time(), 'timeout: %s %3X' % (args.interface, rx_id))
@@ -200,12 +206,6 @@ def send_get_dtc_count(socket):
         rx_payload = socket.recv()
         # NOTE: rx_payload[4:6] means byte 4 and 5.
         print(dump_msg(rx_payload), '/', '%d DTCs' % (int.from_bytes(rx_payload[4:6], byteorder='big')))
-        count = int(len(rx_payload[3:]) / 3)
-        dtcs = list()
-        offset = 3
-        for i in range(0, count):
-            dtcs.append(int.from_bytes(rx_payload[offset+i*3:offset+(i*3)+3], 'big'))
-        return dtcs
     except TimeoutError:
         if args.debug:
             print(time.time(), 'timeout: %s %3X' % (args.interface, rx_id))
