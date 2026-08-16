@@ -12,6 +12,7 @@
 # TODO:
 #   * Support DoIP
 #   * Support J1979 (Legacy OBD)
+import sys
 import time
 import argparse
 
@@ -21,8 +22,11 @@ import isotp
 #import obd
 import yaml
 import pprint
+import logging
 
 args = None
+global logger
+logger = None
 
 def get_did(rx_payload):
     return '%04X' %(int.from_bytes(rx_payload[1:3], 'big'))
@@ -38,20 +42,18 @@ def dump_message(rx_msg):
     return msg
 
 def serve_functional():
-    if args.debug:
-        print('DEBUG: serve_functional(): started.')
+    logger.debug('started.')
 
     bus = can.interface.Bus(interface='socketcan',
                             channel=args.interface,
                             bitrate=500000)
 
-    bus.set_filters([{"can_id": 0x7DF,
-                      "can_mask": 0x7F8,
-                      "extended": False}])
+    bus.set_filters([{'can_id': 0x7DF,
+                      'can_mask': 0x7F8,
+                      'extended': False}])
 
     poll_timeout = args.poll_timeout
-    if args.debug:
-        print('DEBUG: serve_functional(): set recv timeout to %d' % (poll_timeout))
+    logger.debug('set recv timeout to %d' % (poll_timeout))
     count = 0
     rx_msg = None
     try:
@@ -61,24 +63,21 @@ def serve_functional():
             # adaptive busy poll
             if rx_msg and poll_timeout == args.poll_timeout:
                 poll_timeout = 0.1
-                if args.debug:
-                    print('DEBUG: poll_timeout: %d count: %d' %( poll_timeout, count))
-                    print('DEBUG: set recv timeout to %f' % (poll_timeout))
+                logger.debug('poll_timeout: %d count: %d' %( poll_timeout, count))
+                logger.debug('set recv timeout to %f' % (poll_timeout))
             if poll_timeout < args.poll_timeout and count >= 100:
                 count = 0
                 poll_timeout = args.poll_timeout
-                if args.debug:
-                    print('DEBUG: poll_timeout: %d count: %d' % (poll_timeout, count))
-                    print('DEBUG: set recv timeout to %f' % (poll_timeout))
+                logger.debug('poll_timeout: %d count: %d' % (poll_timeout, count))
+                logger.debug('set recv timeout to %f' % (poll_timeout))
 
             if rx_msg is not None:
-                if args.debug:
-                    print(dump_message(rx_msg))
+                logger.debug(dump_message(rx_msg))
                 #
                 # SID=0x22, DID=0xF810 - Protocol Identification
                 if rx_msg.data[1] == 0x22 and rx_msg.data[2] == 0xF8 and rx_msg.data[3] == 0x10:
                 #if rx_msg.data[1] == 0x22 and rx_msg.data[2:3] == 0xF810:
-                    print('Received SID=0x22, DID=0xF810 (Protocol Identification)')
+                    logger.info('Received SID=0x22, DID=0xF810 (Protocol Identification)')
                     res_data = [0x03,            # ISOTP Sigle Frame, length=2
                                 0x22 + 0x40,     # SID=0x22 + 0x40
                                 0xF8, 0x10,      # DID=0xF810
@@ -101,17 +100,16 @@ def serve_functional():
                         bus.send(msg)
 
                 else:
-                    print('Not SID=0x22/DID=0xF810 of J1979-2 to: %X', 0x7DF)
+                    logger.info('Not SID=0x22/DID=0xF810 of J1979-2 to: %X', 0x7DF)
 
     except can.CanError as e:
-        print(f"CAN Exception: {e}")
+        logger.error(f'CAN Exception: {e}')
     finally:
         bus.shutdown()
 
 
 def serve_ecu(interface, rx_id):
-    if args.debug:
-        print('DEBUG: serve_ecu(): %s: can_id: %X' % (interface, rx_id), vehicle_data['vehicle']['ecus'][rx_id]['ecu_name'])
+    logger.debug('%s: can_id: %X %s' % (interface, rx_id, vehicle_data['vehicle']['ecus'][rx_id]['ecu_name']))
 
     socket = isotp.socket()
     socket.bind(interface, isotp.Address(rxid=rx_id, txid=rx_id + 0x8))
@@ -123,14 +121,14 @@ def serve_ecu(interface, rx_id):
                 rx_payload = socket.recv()
                 msg = ' '.join('%02X' % rx_payload[idx]for idx in range(0, len(rx_payload)))
 
-                print('%7s %3X [%d] %s (isotp)' % (interface, rx_id, len(msg), msg))
+                logger.info('%-7s %3X [%d] %s (isotp)' % (interface, rx_id, len(msg), msg))
                 # SID  0x22 (Read DID by Identifier)
                 if rx_payload[0] == 0x22:
                     did = int('0x' + get_did(rx_payload), 16)
                     #print('DEBUG: did: %04X' % (did))
                     if did == 0xF802 or did == 0xF190:
                         # 0xF801 is WWH-OBD(ISO 27145), F190 UDS(ISO 14229)
-                        print('request to get VIN (DID: %04X)' % (did))
+                        logger.info('request to get VIN (DID: %04X)' % (did))
                         #
                         vin = vehicle_data['vehicle']['vin']
                         data = bytes([0x22 + 0x40, rx_payload[1], rx_payload[2]])+ vin.encode('utf-8')
@@ -140,7 +138,7 @@ def serve_ecu(interface, rx_id):
                     # Software Number   F188
                     # SW_VERSON F189
                     elif did == 0xF189:
-                        print('request to get SW VERSION (DID: F189)')
+                        logger.info('request to get SW VERSION (DID: F189)')
                         #
                         sw_version = vehicle_data['vehicle']['ecus'][rx_id]['data'][0x22][0xF189]
                         #print(sw_version)
@@ -151,7 +149,7 @@ def serve_ecu(interface, rx_id):
                     # Engine code       F19E
                     # ENGINE LOAD       F404
                     elif did == 0xF404:
-                        print('request to get ENGINE LOAD (DID: F404)')
+                        logger.info('request to get ENGINE LOAD (DID: F404)')
                         load = 45
                         load = int(load * 255 / 100) # 0 - 100%
                         data = bytes([0x22 + 0x40, 0xF8, 0x11, load])
@@ -159,7 +157,7 @@ def serve_ecu(interface, rx_id):
 
                     # RPM      F40C
                     elif did == 0xF40C:
-                        print('request to get RPM (DID: F40C)')
+                        logger.info('request to get RPM (DID: F40C)')
                         rpm = 2345
                         high, low = divmod(4 * rpm, 256)
                         data = bytes([0x22 + 0x40, 0xF8, 0x0C, high, low])
@@ -167,14 +165,14 @@ def serve_ecu(interface, rx_id):
 
                     # SPEED    F40D
                     elif did == 0xF40D:
-                        print('request to get SPEED (DID: F40D)')
+                        logger.info('request to get SPEED (DID: F40D)')
                         speed = 75
                         data = bytes([0x22 + 0x40, 0xF8, 0x0D, speed])
                         socket.send(data)
 
                     # THROTTLE F411
                     elif did == 0xF411:
-                        print('request to get THROTTLE (DID: F411)')
+                        logger.info('request to get THROTTLE (DID: F411)')
                         throttle = int(64 * 255 / 100) # 0 - 100%
                         data = bytes([0x22 + 0x40, 0xF8, 0x11, throttle,
                                       0xAA, 0xAA, 0xAA])
@@ -182,7 +180,7 @@ def serve_ecu(interface, rx_id):
 
                     # AMBIENT_TEMP F446
                     elif did == 0xF446:
-                        print('request to get AMBIENT_TEMP (DID: F446)')
+                        logger.info('request to get AMBIENT_TEMP (DID: F446)')
                         atemp = 32
                         data = bytes([0x22 + 0x40, 0xF8, 0x46, atemp,
                                       0xAA, 0xAA, 0xAA])
@@ -190,7 +188,7 @@ def serve_ecu(interface, rx_id):
 
                     # ECU_NAME F80A
                     elif did == 0xF80A:
-                        print('request to get ECU_NAME (DID: F80A)')
+                        logger.info('request to get ECU_NAME (DID: F80A)')
                         #
                         ecu_name = vehicle_data['vehicle']['ecus'][rx_id]['ecu_name']
                         #print(ecu_name)
@@ -198,7 +196,7 @@ def serve_ecu(interface, rx_id):
                         socket.send(data)
 
                     else:
-                        print('DID: %s not supported(yet)' % (did))
+                        logger.info('DID: %s not supported(yet)' % (did))
                         data = bytes([0x7F, 0x22, 0x31,
                                       0xAA, 0xAA, 0xAA, 0xAA])
                         socket.send(data)
@@ -210,8 +208,7 @@ def serve_ecu(interface, rx_id):
 
                 # SID 0x19 - ReadDTCInformation
                 elif rx_payload[0] == 0x19:
-                    if args.debug:
-                        print('DEGUG: reportDTCByStatusMask received. SF: 0x%02X' % (rx_payload[1]))
+                    logger.debug('reportDTCByStatusMask received. SF: 0x%02X' % (rx_payload[1]))
                     # SubFunction 0x01 - ReportNumberOfDTCByStatusMask
                     if rx_payload[1] == 0x01:
                         num_dtcs = 0
@@ -243,41 +240,52 @@ def serve_ecu(interface, rx_id):
                 elif rx_payload[0] == 0x3E:
                     # No SuppressPosRspMsgIndicationBit
                     if rx_payload[1] == 0x00:
-                        if args.debug:
-                            print('Request Tester present with ACK. (SID: 0x3E)')
+                        logger.debug('Request Tester present with ACK. (SID: 0x3E)')
                         data = bytes([0x3E + 0x40, 0x00])
                         socket.send(data)
 
                 # non-supported SID
                 else:
-                    print('SID: %02X not supported(yet)' % (rx_payload[0]))
+                    logger.warn('SID: %02X not supported(yet)' % (rx_payload[0]))
                     data = bytes([0x7F, rx_payload[0], 0x11])
                     socket.send(data)
 
             except TimeoutError:
                 if args.debug and args.verbose:
-                    print(time.time(), 'timeout: %s %3X' % (interface, rx_id))
+                    logger.debug('timeout: %s %3X' % (interface, rx_id))
                 continue
     except Exception as e:
-        print('Exeption: ', e)
+        logger.error(f'Exeption: {e}')
     finally:
-        print('DEBUG: closing isotp socket')
+        logger.debug('closing isotp socket')
         socket.close()
 
 
 
 vehicle_data = None
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="responer.py")
-    parser.add_argument("--poll_timeout", type=float, default=10.0)
-    parser.add_argument("-i", "--interface", default='vcan0')
-    parser.add_argument("-b", "--broadcast", default=0x7DF)
-    parser.add_argument("-m", "--mode", default='J1979-2')
-    parser.add_argument("-d", "--debug", action="store_true")
-    parser.add_argument("--verbose", action="store_true")
-    parser.add_argument("--ecus", nargs='*', type=lambda x: int(x, 16), default=[0x7E0, 0x7E1, 0x7E2])
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='responer.py')
+    parser.add_argument('--poll_timeout', type=float, default=10.0)
+    parser.add_argument('-i', '--interface', default='vcan0')
+    parser.add_argument('-b', '--broadcast', default=0x7DF)
+    parser.add_argument('-m', '--mode', default='J1979-2')
+    parser.add_argument('-d', '--debug', action='store_true')
+    parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--ecus', nargs='*', type=lambda x: int(x, 16), default=[0x7E0, 0x7E1, 0x7E2])
     args = parser.parse_args()
+
+    # logging
+    logger = logging.getLogger('DataCollectionAgent')
+    log_level = 'DEBUG' if args.debug else 'INFO'
+    logger.setLevel(log_level)
+    logger.propagate = False
+    formatter = logging.Formatter(
+        fmt = '%(asctime)s.%(msecs)03d %(levelname)s: %(funcName)s: %(message)s',
+        datefmt='%Y/%m/%d %H:%M:%S')
+    streamHandler = logging.StreamHandler(sys.stdout)
+    streamHandler.setFormatter(formatter)
+    logger.addHandler(streamHandler)
 
     with open('vehicle.yaml', 'rt') as fp:
         vehicle_data = yaml.load(fp, Loader=yaml.SafeLoader)
@@ -285,7 +293,7 @@ if __name__ == "__main__":
         sys.exit()
     # DEBUG
     if args.debug and args.verbose:
-        pprint.pprint(vehicle_data)
+        logger.debug(pprint.pformat(vehicle_data))
 
     th_functional = threading.Thread(target=serve_functional, args=())
     th_functional.start()
