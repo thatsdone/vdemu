@@ -68,7 +68,7 @@ Masanori Itoh <masanori.itoh@gmail.com>
 ## TODO
 * Update this README.md
 * Support more SIDs, DIDs, DTCs and OBD/UDS features
-* Support J1979 (Legacy OBD)
+* Support J1979 (Legacy OBD) (DTC handling improvement)
 * Support DoIP
 
 ## References

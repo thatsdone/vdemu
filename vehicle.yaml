@@ -8,7 +8,6 @@
 #   Masanori Itoh <masanori.itoh@gmail.com>
 # TODO:
 #   * Support DoIP
-#   * Support J1979 (Legacy OBD)
 database:
   sids:
     - 0x22
@@ -80,7 +79,8 @@ vehicle:
         0x19: # DTCs
           - 0x012308 # P0123, Confirmed
           - 0x020108 # P0201, Confirmed
-          - 0x030008 # P0300, Confirmed
+          - 0x030004 # P0300, Pending
+          # Note: permanent is returned to SID: 0x19 SF:0x55
     0x7E4:
       ecu_name: 'AGL_IVI'
       data:
