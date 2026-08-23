@@ -180,7 +180,8 @@ def serve_ecu(interface, rx_id):
                 rx_payload = socket.recv()
 
                 msg = ' '.join('%02X' % rx_payload[idx] for idx in range(0, len(rx_payload)))
-                logger.info('%-7s %3X [%d] %s (isotp)' % (interface, rx_id, len(msg), msg))
+                logger.info('isotp: %-7s %3X [%d] %s' % (interface, rx_id, len(rx_payload), msg))
+                print('DEBUG:', msg)
 
                 # check J1979/J1979-2 consistency
                 action = check_mode(rx_payload)
@@ -271,7 +272,7 @@ def serve_ecu(interface, rx_id):
                         socket.send(data)
 
                     else:
-                        logger.info('DID: %s not supported(yet)' % (did))
+                        logger.warning('DID: %s not supported(yet)' % (did))
                         data = bytes([0x7F, 0x22, 0x31,
                                       0xAA, 0xAA, 0xAA, 0xAA])
                         socket.send(data)
@@ -307,7 +308,7 @@ def serve_ecu(interface, rx_id):
                         socket.send(data)
 
                     else:
-                        print('Subfunction: %02X not supported(yet)' % (rx_payload[1]))
+                        logger.warning('Subfunction: %02X not supported(yet)' % (rx_payload[1]))
                         data = bytes([0x7F, rx_payload[1], 0x7E])
                         socket.send(data)
 
