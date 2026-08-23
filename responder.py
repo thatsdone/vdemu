@@ -142,6 +142,7 @@ def serve_functional():
                         0x06,                   # ISOTP Sigle Frame, length=6
                         0x01 + 0x40,            # Mode=0x01 + 0x40
                         0x00,                   # Response PID
+                        # TODO: build actual supported PID list
                         0xBE, 0x3E, 0x20, 0x00, # supported PIDs (bitmap)
                         0x00                    # padding
                     ]
@@ -399,6 +400,18 @@ def serve_ecu(interface, rx_id):
                             dtc_list += [dtc1, dtc2]#, dtc3]
                     data = bytes([rx_payload[0] + 0x40]) + bytes(dtc_list)
                     socket.send(data)
+
+                elif rx_payload[0] == 0x01 and (rx_payload[1] == 0x00 or
+                                                rx_payload[1] == 0x20 or
+                                                rx_payload[1] == 0x40):
+                    res_data = [
+                        0x01 + 0x40,            # Mode=0x01 + 0x40
+                        rx_payload[1],          # Response PID
+                        # TODO: build actual supported PID list
+                        0xBE, 0x3E, 0x20, 0x00, # supported PIDs (bitmap)
+                        0xAA                    # padding
+                    ]
+                    socket.send(bytes(res_data))
 
                 # non-supported SID(J1979-2) / Mode(J1979)
                 else:
