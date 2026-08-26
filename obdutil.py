@@ -66,8 +66,10 @@ class OBDUtil():
                         0x00, 0x00, 0x00, 0x00]
         elif self.mode == 'J1979':
             # J1979  Mode 0x01 PID=00 with zero pading
-            req_data = [0x02, 0x01,
-                        0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+            req_data = [0x02, # ISOTP SF (len=2)
+                        0x01, # Mode 0x01
+                        0x00, # PID 0x00
+                        0x00, 0x00, 0x00, 0x00, 0x00]
 
         msg = can.Message(
             arbitration_id=0x7DF,
@@ -84,7 +86,7 @@ class OBDUtil():
             while (time.time() - start_time) < self.scan_timeout:
                 # busy poll using timeout default is 0.1s
                 rx_msg = bus.recv(timeout=self.busy_poll_timeout)
-                if rx_msg is not None:
+                if rx_msg:
                     captured_responses.append(rx_msg)
             if self.verbose:
                 print(f'DEBUG: Received {len(captured_responses)} messages')
@@ -119,6 +121,27 @@ class OBDUtil():
         finally:
             bus.shutdown()
             return captured_responses
+
+    # send_supported_pids()
+    #   pid_base: base of PID range. e.g., 0x00, 0x20,...
+    def send_supported_pids(self, socket, pid_base):
+
+        if not pid_base in [0x00, 0x20, 0x40]:  # can be 0xE0
+            logger.error(f'Unknown pid_base: {pid_base:02X}')
+            return None
+
+        rx_payload = None
+        try:
+            # send Tester Present with response request
+            socket.send(bytes([0x01, pid_base]))
+            rx_payload = socket.recv()
+            if self.verbose:
+                print(self.dump_msg(rx_payload), '/', 'PIDS_A/..{pid_base:02X}')
+        except TimeoutError:
+            if self.verbose:
+                print(time.time(), 'timeout: %s %3X' % (args.interface, rx_id))
+        # return supported PID bitmap only
+        return rx_payload[2:6]
 
     def send_tester_present(self, socket):
         rx_payload = None
@@ -479,6 +502,8 @@ if __name__ == '__main__':
         sw_version = obdutil.send_get_sw_version(s, parse=True)
         print('SW_VERSION:', sw_version)
         dtc_count = obdutil.send_get_dtc_count(s)
+        pid_map = obdutil.send_supported_pids(s, 0x00)
+        print(f'Supported PIDs: {int.from_bytes(pid_map, "big"):08X}')
         print('DTC count(all)(dump):', obdutil.dump_msg(dtc_count))
         if dtc_count[0] != 0x7F:
             if args.mode == 'J1979':

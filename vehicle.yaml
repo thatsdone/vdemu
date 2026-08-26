@@ -63,6 +63,13 @@ vehicle:
   ecus:
     0x7E0:
       ecu_name: 'EngineECU' # read by DID: 0xF80A
+      pids:
+        # Mode 0x01
+        - 0x01 # Monitor status since DTCs cleared
+        - 0x0C # RPM
+        - 0x0D # SPEED
+        - 0x11 # THROTTLE_RATE
+        - 0x46 # AMBIENT_TEMP
       data:
         0x22:
           0xF189: '1.0.0'
@@ -83,32 +90,50 @@ vehicle:
           # Note: permanent is returned to SID: 0x19 SF:0x55
     0x7E4:
       ecu_name: 'AGL_IVI'
+      pids:
+        # Mode 0x01
+        - 0x01 # Monitor status since DTCs cleared
       data:
         0x22:
           0xF189: '21.0.2'
   #        name: 'Vehicle Manufacturer ECU Software Version Number'
     0x7E5:
       ecu_name: 'AGL_IC'
+      pids:
+        # Mode 0x01
+        - 0x01 # Monitor status since DTCs cleared
       data:
         0x22:
           0xF189: '21.91.0'
     0x7E1:
       ecu_name: 'TransmissionECU'
+      pids:
+        # Mode 0x01
+        - 0x01 # Monitor status since DTCs cleared
       data:
         0x22:
           0xF189: '1.0.0'
     0x7E2:
       ecu_name: 'HybridECU'
+      pids:
+        # Mode 0x01
+        - 0x01 # Monitor status since DTCs cleared
       data:
         0x22:
           0xF189: '1.0.0'
     0x7E6:
       ecu_name: 'DUMMY'
+      pids:
+        # Mode 0x01
+        - 0x01 # Monitor status since DTCs cleared
       data:
         0x22:
           0xF189: '1.0.0'
     0x7E3:
       ecu_name: 'TCU/AGL_TELEMATICS'
+      pids:
+        # Mode 0x01
+        - 0x01 # Monitor status since DTCs cleared
       data:
         0x22:
           0xF189: '1.0.0'

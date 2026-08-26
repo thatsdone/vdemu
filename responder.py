@@ -25,6 +25,32 @@ args = None
 global logger
 logger = None
 
+pidlist = [0x01, 0x0C, 0x0D, 0x11, 0x46]
+
+def pid_bitmap(pid):
+    base_value = ((pid // 0x20) + 1) * 0x20
+    return (0x1 << (0x20 - (pid % 0x20)))
+
+
+# pid: 0x00, 0x20, 0x40,
+# supported_pids: 0x1C, 0x1D, 0x46 etc.
+def build_bitmap(base_pid=0x00, supported_pids=[]):
+    bitmap = 0x00000000
+
+    if len(supported_pids) <= 0:
+        supported_pids = pidlist
+
+    has_next = False
+    for p in supported_pids:
+        if p >= base_pid and p < base_pid + 0x20:
+            bitmap |= pid_bitmap(p)
+        elif p > base_pid + 0x20:
+            has_next = True
+            bitmap |= 0x1
+
+    return bitmap
+
+
 def get_did(rx_payload):
     return '%04X' %(int.from_bytes(rx_payload[1:3], 'big'))
 
@@ -38,16 +64,16 @@ def dump_message(rx_msg):
     )
     return msg
 
-def check_mode(rx_payload):
+def check_mode(isotp_payload):
     # J1979 Mode 0x01 ~ 0x0A
-    if rx_payload[0] >= 0x01 and rx_payload[0] <= 0x0A:
+    if isotp_payload[0] >= 0x01 and isotp_payload[0] <= 0x0A:
         # J1979 request
         #logger.debug(f'J1979 request in {args.mode} mode')
         # J1979 req in J1979   -> GO
         # J1979 req in J1979-2 -> GO
         return 0
 
-    elif rx_payload[0] in [0x19, 0x22, 0x3E]:
+    elif isotp_payload[0] in [0x19, 0x22, 0x3E]:
         # J1979-2 request
         #   0x19 # Read DTC Read DTC Information
         #   0x22 # Read DID by Identifier
@@ -61,7 +87,7 @@ def check_mode(rx_payload):
             return 0
         return
     else:
-        logger.error(f'Non supported first byte(Mode/SID): {rx_payload[0]:02X}')
+        logger.error(f'Non supported Mode/SID): {isotp_payload[0]:02X}')
         return -1
 
 
@@ -89,6 +115,7 @@ def serve_functional():
             else:
                 check_mode(rx_msg.data[1:])
             count += 1
+
             # adaptive busy poll
             if rx_msg and poll_timeout == args.poll_timeout:
                 poll_timeout = 0.1
@@ -110,7 +137,7 @@ def serve_functional():
                         logger.info('In J1979 mode, 0x22 is ignored')
                         continue
 
-                    res_data = [0x03,            # ISOTP Sigle Frame, length=2
+                    res_data = [0x03,            # ISOTP Sigle Frame, length=3
                                 0x22 + 0x40,     # SID=0x22 + 0x40
                                 0xF8, 0x10,      # DID=0xF810
                                 0x01,            # supports OBDonUDS
@@ -133,26 +160,28 @@ def serve_functional():
 
                 # J1979 (Legacy OBD)
                 # length=0x02, mode=0x01 PID=0x00
-                elif rx_msg.data[0] == 0x02 and rx_msg.data[1] == 0x01 and rx_msg.data[2] == 0x00:
+                #elif rx_msg.data[0] == 0x02 and rx_msg.data[1] == 0x01 and rx_msg.data[2] == 0x00:
+                # note: DTCs. mode= 03, 07, 0A
+                # note: rx_msg.data[0] is ISOTP control byte
+                elif rx_msg.data[1] == 0x01 and (
+                        rx_msg.data[2] in [0x00, 0x20, 0x40]):
+                        # Theoretically PID can be 0x00, 0x20, 0x40,...,0xE0
                     logger.info('Received J1979 Mode=0x01, PID=0x00 (Supported PID List)')
                     if args.mode == 'J1979-2':
                         logger.info('Got J1979 Mode:0x01 PID:0x00 in J1979-2 mode')
-
+                    bitmap = build_bitmap(rx_msg.data[2], supported_pids=pidlist)
+                    bitmap = bytearray(bytes(bitmap.to_bytes(4, 'big')))
                     res_data = [
-                        0x06,                   # ISOTP Sigle Frame, length=6
-                        0x01 + 0x40,            # Mode=0x01 + 0x40
-                        0x00,                   # Response PID
-                        # TODO: build actual supported PID list
-                        0xBE, 0x3E, 0x20, 0x00, # supported PIDs (bitmap)
-                        0x00                    # padding
+                        0x08,                   # ISOTP Sigle Frame, length=8
+                        rx_msg.data[1] + 0x40,  # Mode=0x01 + 0x40
+                        rx_msg.data[2]          # Response PID
                     ]
-                    #   1011 1110 0011 1110 0010 0000 0000 0000
-                    # send resp
+                    res_data += bitmap
+                    res_data += [0x00]
+
+                    # send resposes
                     for rx_id in args.ecus:
                         msg = can.Message(
-                            # Engine ECU req/res CAN ID           : 7E0/7E8
-                            # Transmission ECU req/res CAN ID     : 7E1/7E9
-                            # Hybrid/BEV Powrtrain req/res CAN ID : 7E2/7EA
                             arbitration_id=rx_id + 0x8,
                             data=res_data,
                             is_extended_id=False
@@ -182,7 +211,6 @@ def serve_ecu(interface, rx_id):
 
                 msg = ' '.join('%02X' % rx_payload[idx] for idx in range(0, len(rx_payload)))
                 logger.info('isotp: %-7s %3X [%d] %s' % (interface, rx_id, len(rx_payload), msg))
-                print('DEBUG:', msg)
 
                 # check J1979/J1979-2 consistency
                 action = check_mode(rx_payload)
@@ -401,16 +429,19 @@ def serve_ecu(interface, rx_id):
                     data = bytes([rx_payload[0] + 0x40]) + bytes(dtc_list)
                     socket.send(data)
 
+                # Supported PIDs (0x00, 0x20, 0x40,...0xE0)
                 elif rx_payload[0] == 0x01 and (rx_payload[1] == 0x00 or
                                                 rx_payload[1] == 0x20 or
                                                 rx_payload[1] == 0x40):
+                    bitmap = build_bitmap(rx_msg.data[2], supported_pids=pidlist)
+                    bitmap = bytearray(bytes(bitmap.to_bytes(4, 'big')))
                     res_data = [
                         0x01 + 0x40,            # Mode=0x01 + 0x40
-                        rx_payload[1],          # Response PID
-                        # TODO: build actual supported PID list
-                        0xBE, 0x3E, 0x20, 0x00, # supported PIDs (bitmap)
-                        0xAA                    # padding
+                        rx_payload[1]           # Response PID
                     ]
+                    res_data += bitmap          # PID bitmap
+                    res_data += [0xAA]          # padding
+
                     socket.send(bytes(res_data))
 
                 # non-supported SID(J1979-2) / Mode(J1979)
@@ -466,7 +497,7 @@ if __name__ == '__main__':
         vehicle_data = yaml.load(fp, Loader=yaml.SafeLoader)
     if not vehicle_data:
         sys.exit()
-    # DEBUG
+
     if args.debug and args.verbose:
         logger.debug(pprint.pformat(vehicle_data))
 
