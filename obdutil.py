@@ -37,6 +37,17 @@ class OBDUtil():
         msg = ' '.join('%02X' % rx_payload[idx]for idx in range(0, len(rx_payload)))
         return msg
 
+    # For J1979 (Classic OBD)
+    def extract_pids(self, base_pid, bitmap):
+        pids = []
+        test_bit = 0x80000000
+        bitmap_copy = bitmap
+        for idx in range(1, 0x20):
+            if bitmap >> (0x20 - idx) & 0x1 != 0:
+                pids.append(idx + base_pid)
+        return pids
+
+    # For J1979-2 (OBDonUDS)
     def get_did(self, rx_payload):
         return '%04X' %(int.from_bytes(rx_payload[1:3], 'big'))
 
@@ -462,6 +473,8 @@ if __name__ == '__main__':
     print('ECU_NAME:', ecu_name)
     sw_version = obdutil.send_get_sw_version(socket, parse=True)
     print('SW_VERSION:', sw_version)
+    pid_map = obdutil.send_supported_pids(socket, 0x00)
+    print(f'Supported PIDs: {int.from_bytes(pid_map, "big"):08X}')
     rpm = obdutil.send_get_rpm(socket)
     print('RPM(dump):', obdutil.dump_msg(rpm))
     if rpm[0] != 0x7F:

@@ -25,7 +25,7 @@ args = None
 global logger
 logger = None
 
-pidlist = [0x01, 0x0C, 0x0D, 0x11, 0x46]
+default_pidlist = [0x01, 0x0C, 0x0D, 0x11, 0x46]
 
 def pid_bitmap(pid):
     base_value = ((pid // 0x20) + 1) * 0x20
@@ -38,7 +38,7 @@ def build_bitmap(base_pid=0x00, supported_pids=[]):
     bitmap = 0x00000000
 
     if len(supported_pids) <= 0:
-        supported_pids = pidlist
+        supported_pids = default_pidlist
 
     has_next = False
     for p in supported_pids:
@@ -49,7 +49,6 @@ def build_bitmap(base_pid=0x00, supported_pids=[]):
             bitmap |= 0x1
 
     return bitmap
-
 
 def get_did(rx_payload):
     return '%04X' %(int.from_bytes(rx_payload[1:3], 'big'))
@@ -169,18 +168,21 @@ def serve_functional():
                     logger.info('Received J1979 Mode=0x01, PID=0x00 (Supported PID List)')
                     if args.mode == 'J1979-2':
                         logger.info('Got J1979 Mode:0x01 PID:0x00 in J1979-2 mode')
-                    bitmap = build_bitmap(rx_msg.data[2], supported_pids=pidlist)
-                    bitmap = bytearray(bytes(bitmap.to_bytes(4, 'big')))
-                    res_data = [
-                        0x08,                   # ISOTP Sigle Frame, length=8
-                        rx_msg.data[1] + 0x40,  # Mode=0x01 + 0x40
-                        rx_msg.data[2]          # Response PID
-                    ]
-                    res_data += bitmap
-                    res_data += [0x00]
 
                     # send resposes
                     for rx_id in args.ecus:
+                        #
+                        plist = vehicle_data['vehicle']['ecus'][rx_id]['data'].get(0x01)
+                        bitmap = build_bitmap(rx_msg.data[2], supported_pids=plist)
+                        bitmap = bytearray(bytes(bitmap.to_bytes(4, 'big')))
+                        res_data = [
+                            0x08,                   # ISOTP Sigle Frame, length=8
+                            rx_msg.data[1] + 0x40,  # Mode=0x01 + 0x40
+                            rx_msg.data[2]          # Response PID
+                        ]
+                        res_data += bitmap
+                        res_data += [0xAA]
+                        #
                         msg = can.Message(
                             arbitration_id=rx_id + 0x8,
                             data=res_data,
@@ -433,7 +435,8 @@ def serve_ecu(interface, rx_id):
                 elif rx_payload[0] == 0x01 and (rx_payload[1] == 0x00 or
                                                 rx_payload[1] == 0x20 or
                                                 rx_payload[1] == 0x40):
-                    bitmap = build_bitmap(rx_msg.data[2], supported_pids=pidlist)
+                    plist = vehicle_data['vehicle']['ecus'][rx_id]['data'].get(0x01)
+                    bitmap = build_bitmap(rx_payload[1], supported_pids=plist)
                     bitmap = bytearray(bytes(bitmap.to_bytes(4, 'big')))
                     res_data = [
                         0x01 + 0x40,            # Mode=0x01 + 0x40

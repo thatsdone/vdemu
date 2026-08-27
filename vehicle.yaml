@@ -58,20 +58,25 @@ database:
         example: 'VIN12345678901234'
 
 vehicle:
-  mode: 'J1979-2'
+  mode: 'J1979'
   vin: 'VIN12345678901234' # read by CANID: 0x7DF SID: 0x22 DID: 0xF802
   ecus:
     0x7E0:
       ecu_name: 'EngineECU' # read by DID: 0xF80A
-      pids:
-        # Mode 0x01
-        - 0x01 # Monitor status since DTCs cleared
-        - 0x0C # RPM
-        - 0x0D # SPEED
-        - 0x11 # THROTTLE_RATE
-        - 0x46 # AMBIENT_TEMP
       data:
-        0x22:
+        0x01:
+          # J1979 Mode 0x01
+          - 0x01 # Monitor status since DTCs cleared
+          - 0x0C # RPM
+          - 0x0D # SPEED
+          - 0x11 # THROTTLE_RATE
+          - 0x46 # AMBIENT_TEMP
+          # J1979 Mode 0x09
+        0x09:
+          - 0x02 # VIN
+          - 0x0A # ECU Name
+          - 0x04 # Calibration ID
+        0x22: # J1979-2 SID 0x22
           0xF189: '1.0.0'
           0xF404: 35
   #        name: 'ENGINE_LOAD'
@@ -107,18 +112,24 @@ vehicle:
           0xF189: '21.91.0'
     0x7E1:
       ecu_name: 'TransmissionECU'
-      pids:
-        # Mode 0x01
-        - 0x01 # Monitor status since DTCs cleared
       data:
+        0x01:
+          # J1979 Mode 0x01
+          - 0x01 # Monitor status since DTCs cleared
+        0x09:
+          - 0x0A # ECU Name
+          - 0x04 # Calibration ID
         0x22:
           0xF189: '1.0.0'
     0x7E2:
       ecu_name: 'HybridECU'
-      pids:
-        # Mode 0x01
-        - 0x01 # Monitor status since DTCs cleared
       data:
+        0x01:
+          # J1979 Mode 0x01
+          - 0x01 # Monitor status since DTCs cleared
+        0x09:
+          - 0x0A # ECU Name
+          - 0x04 # Calibration ID
         0x22:
           0xF189: '1.0.0'
     0x7E6:
