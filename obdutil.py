@@ -436,6 +436,7 @@ if __name__ == '__main__':
 
     obdutil = OBDUtil()
     obdutil.verbose = args.verbose
+    captured_responses = {}
 
     if not args.mode in ['J1979-2', 'J1979']:
         print(f'Invalide mode: {args.mode}')
@@ -473,8 +474,15 @@ if __name__ == '__main__':
     print('ECU_NAME:', ecu_name)
     sw_version = obdutil.send_get_sw_version(socket, parse=True)
     print('SW_VERSION:', sw_version)
+    #
     pid_map = obdutil.send_supported_pids(socket, 0x00)
-    print(f'Supported PIDs: {int.from_bytes(pid_map, "big"):08X}')
+    bitmap = 0x00000001
+    pid_offset = 0x00
+    while bitmap & 0x1:
+        pid_map = obdutil.send_supported_pids(socket, pid_offset)
+        bitmap = int.from_bytes(pid_map, 'big')
+        print(f'Supported PIDs(Mode: 0x01 PID: {pid_offset:02X}): {bitmap:08X}')
+        pid_offset += 0x20
     rpm = obdutil.send_get_rpm(socket)
     print('RPM(dump):', obdutil.dump_msg(rpm))
     if rpm[0] != 0x7F:
@@ -487,7 +495,7 @@ if __name__ == '__main__':
         print('SPEED:', speed[idx])
     throttle = obdutil.send_get_throttle(socket)
     print('THROTTLE_POS(dump):', obdutil.dump_msg(throttle))
-    if rpm[0] != 0x7F:
+    if throttle[0] != 0x7F:
         idx = 3  if args.mode == 'J1979-2' else 2
         print('THROTTLE_POS:', throttle[idx] * 100 / 255)
     ambient_temp = obdutil.send_get_ambient_temp(socket)
@@ -516,7 +524,14 @@ if __name__ == '__main__':
         print('SW_VERSION:', sw_version)
         dtc_count = obdutil.send_get_dtc_count(s)
         pid_map = obdutil.send_supported_pids(s, 0x00)
-        print(f'Supported PIDs: {int.from_bytes(pid_map, "big"):08X}')
+        bitmap = 0x00000001
+        pid_offset = 0x00
+        while bitmap & 0x1:
+            pid_map = obdutil.send_supported_pids(s, pid_offset)
+            bitmap = int.from_bytes(pid_map, 'big')
+            print(f'Supported PIDs(Mode: 0x01 PID: {pid_offset:02X}): {bitmap:08X}')
+            pid_offset += 0x20
+
         print('DTC count(all)(dump):', obdutil.dump_msg(dtc_count))
         if dtc_count[0] != 0x7F:
             if args.mode == 'J1979':
