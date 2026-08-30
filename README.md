@@ -21,14 +21,15 @@ a vehicle consists of multiple ECUs.
 
 ```
 $ python3 responder.py -h
-usage: responder.py [-h] [--poll_timeout POLL_TIMEOUT] [-i INTERFACE]
-                    [-b BROADCAST] [-m MODE] [-d] [--verbose]
+usage: responder.py [-h] [-c CONFIG] [--poll_timeout POLL_TIMEOUT]
+                    [-i INTERFACE] [-b BROADCAST] [-m MODE] [-d] [--verbose]
                     [--ecus [ECUS ...]]
 
 responer.py
 
 options:
   -h, --help            show this help message and exit
+  -c CONFIG, --config CONFIG
   --poll_timeout POLL_TIMEOUT
   -i INTERFACE, --interface INTERFACE
   -b BROADCAST, --broadcast BROADCAST

@@ -469,6 +469,7 @@ vehicle_data = None
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='responer.py')
+    parser.add_argument('-c', '--config',default='vehicle.yaml')
     parser.add_argument('--poll_timeout', type=float, default=10.0)
     parser.add_argument('-i', '--interface', default='vcan0')
     parser.add_argument('-b', '--broadcast', default=0x7DF)
@@ -496,8 +497,10 @@ if __name__ == '__main__':
     else:
         logger.info(f'Running mode: {args.mode}')
 
-    with open('vehicle.yaml', 'rt') as fp:
+    with open(args.config , 'rt') as fp:
         vehicle_data = yaml.load(fp, Loader=yaml.SafeLoader)
+        logger.debug(f'Loaded {args.config}, {len(vehicle_data['vehicle']['ecus'].keys())} ECUs defined.')
+        logger.debug(f'Serving {len(args.ecus)} ECUs')
     if not vehicle_data:
         sys.exit()
 
