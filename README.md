@@ -3,8 +3,8 @@
 ## Description
 
 vdemu is a simple Vehicle Diagnostics data EMUlator responding OBD queries.
-Now only J1979-2 (on CAN) is supported. DoIP and J1979(legacy OBD) are
-future works.
+Now J1979-2 (UDSonCAN) and J1979 (Classic OBD) are supported.
+DoIP is a future work.
 
 vdemu consists of 2 components below:
 
@@ -68,7 +68,6 @@ Masanori Itoh <masanori.itoh@gmail.com>
 ## TODO
 * Update this README.md
 * Support more SIDs, DIDs, DTCs and OBD/UDS features
-* Support J1979 (Legacy OBD) (DTC handling improvement)
 * Support DoIP
 
 ## References
