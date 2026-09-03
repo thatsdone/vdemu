@@ -6,6 +6,7 @@
 #   Apache License, Version 2.0
 # History:
 #   * 2026/08/18 v0.2 rename from obdonuds.py and blush up
+#   * 2026/09/03 v0.3 support ISOTP userland(pure Python) processing
 # Author:
 #   Masanori Itoh <masanori.itoh@gmail.com>
 # TODO:
@@ -22,11 +23,12 @@ import isotp
 class OBDUtil():
 
     scan_timeout = 2.0
-    busy_poll_timeout = 0.1
+    busy_poll_timeout = 0.01
     detected_ecus = {}
 
     verbose = False
     mode = 'J1979'
+    userland_isotp = False
 
     def __init__(self):
         self.logger = logging.getLogger()
@@ -51,7 +53,41 @@ class OBDUtil():
     def get_did(self, rx_payload):
         return '%04X' %(int.from_bytes(rx_payload[1:3], 'big'))
 
+    def close(self, socket):
+        if self.userland_isotp:
+            socket.bus.shutdown()
+        else:
+            socket.close()
+
+    def send(self, socket, payload: bytes):
+        socket.send(payload)
+        if self.userland_isotp:
+            socket.process()
+
+    def recv(self, socket, timeout=None):
+        if self.userland_isotp:
+            response_data = None
+            duration = timeout if timeout else 3.0
+            deadline = time.time() + duration
+            while time.time() < deadline:
+                socket.process()
+                if socket.available():
+                    response_data = socket.recv()
+                    break
+                time.sleep(self.busy_poll_timeout)
+            return response_data
+
+        else:
+            return socket.recv()
+
     def get_isotp_socket(self, interface=None, txid=None, rxid=None):
+
+        if self.userland_isotp:
+            self.bus = can.interface.Bus(interface='socketcan',
+                                         channel=interface)
+            self.addr = isotp.Address(rxid=rxid, txid=txid)
+            return isotp.CanStack(bus=self.bus, address=self.addr)
+
         socket = isotp.socket()
         tx_id = txid
         if not rxid:
@@ -100,7 +136,7 @@ class OBDUtil():
                 if rx_msg:
                     captured_responses.append(rx_msg)
             if self.verbose:
-                print(f'DEBUG: Received {len(captured_responses)} messages')
+                logger.debug(f'Received {len(captured_responses)} messages')
 
             j1979_2_detected = False
             self.detected_ecus = []
@@ -122,7 +158,7 @@ class OBDUtil():
                         print(f'Detected a positive response of J1979-2 (OBD on UDS) (Version: 0x{version:02X})')
 
             if self.verbose:
-                print(f'Response ID of detected ECU: {[f'0x{ecu:03X}' for ecu in sorted(self.detected_ecus)]}')
+                print(f'Response ID of detected ECU: {[f"0x{ecu:03X}" for ecu in sorted(self.detected_ecus)]}')
 
         except can.CanError as cane:
             print(f'ERROR: CAN Communication Errror: {cane}')
@@ -144,8 +180,8 @@ class OBDUtil():
         rx_payload = None
         try:
             # send Tester Present with response request
-            socket.send(bytes([0x01, pid_base]))
-            rx_payload = socket.recv()
+            self.send(socket, bytes([0x01, pid_base]))
+            rx_payload = self.recv(socket)
             if self.verbose:
                 print(self.dump_msg(rx_payload), '/', 'PIDS_A/..{pid_base:02X}')
         except TimeoutError:
@@ -158,8 +194,8 @@ class OBDUtil():
         rx_payload = None
         try:
             # send Tester Present with response request
-            socket.send(bytes([0x3E, 0x00]))
-            rx_payload = socket.recv()
+            self.send(socket, bytes([0x3E, 0x00]))
+            rx_payload = self.recv(socket)
             if self.verbose:
                 print(self.dump_msg(rx_payload), '/', 'Tester Present Positive Response')
         except TimeoutError:
@@ -174,8 +210,8 @@ class OBDUtil():
         if self.mode == 'J1979':
             data = [0x09, 0x02]
         try:
-            socket.send(bytes(data))
-            rx_payload = socket.recv()
+            self.send(socket, bytes(data))
+            rx_payload = self.recv(socket)
             if self.verbose:
                 print(self.dump_msg(rx_payload), '/', rx_payload[3:].decode('utf-8'))
         except TimeoutError:
@@ -199,8 +235,8 @@ class OBDUtil():
         if self.mode == 'J1979':
             data = [0x09, 0x0A]
         try:
-            socket.send(bytes(data))
-            rx_payload = socket.recv()
+            self.send(socket, bytes(data))
+            rx_payload = self.recv(socket)
             if self.verbose:
                 if self.mode == 'J1979-2':
                     print(self.dump_msg(rx_payload), '/', rx_payload[3:].decode('utf-8'))
@@ -226,8 +262,8 @@ class OBDUtil():
         if self.mode == 'J1979':
             data = [0x09, 0x04]
         try:
-            socket.send(bytes(data))
-            rx_payload = socket.recv()
+            self.send(socket, bytes(data))
+            rx_payload = self.recv(socket)
             if self.verbose:
                 if self.mode == 'J1979-2':
                     print(self.dump_msg(rx_payload), '/', rx_payload[3:].decode('utf-8'))
@@ -252,10 +288,10 @@ class OBDUtil():
         try:
             # get RPM  F40C
             if self.mode == 'J1979-2':
-                socket.send(bytes([0x22, 0xF4, 0x0C]))
+                self.send(socket, bytes([0x22, 0xF4, 0x0C]))
             else:
-                socket.send(bytes([0x01, 0x0C]))
-            rx_payload = socket.recv()
+                self.send(socket, bytes([0x01, 0x0C]))
+            rx_payload = self.recv(socket)
             if self.verbose:
                 if self.mode == 'J1979-2':
                     print(self.dump_msg(rx_payload), '/', (rx_payload[3] * 256 + rx_payload[4])/4)
@@ -274,11 +310,11 @@ class OBDUtil():
         try:
             # get SPEED  F40D
             if self.mode == 'J1979-2':
-                socket.send(bytes([0x22, 0xF4, 0x0D]))
+                self.send(socket, bytes([0x22, 0xF4, 0x0D]))
             else:
-                socket.send(bytes([0x01, 0x0D]))
+                self.send(socket, bytes([0x01, 0x0D]))
 
-            rx_payload = socket.recv()
+            rx_payload = self.recv(socket)
             if self.verbose:
                 if self.mode == 'J1979-2':
                     print(self.dump_msg(rx_payload), '/', rx_payload[3])
@@ -297,11 +333,11 @@ class OBDUtil():
         try:
             # get THROTTLE_POS  F411
             if self.mode == 'J1979-2':
-                socket.send(bytes([0x22, 0xF4, 0x11]))
+                self.send(socket, bytes([0x22, 0xF4, 0x11]))
             else:
-                socket.send(bytes([0x01, 0x11]))
+                self.send(socket, bytes([0x01, 0x11]))
 
-            rx_payload = socket.recv()
+            rx_payload = self.recv(socket)
             if self.verbose:
                 print(self.dump_msg(rx_payload), '/', rx_payload[3] * 100 / 255)
         except TimeoutError:
@@ -316,11 +352,11 @@ class OBDUtil():
         try:
             # get AMBIENT_TEMP  F446
             if self.mode == 'J1979-2':
-                socket.send(bytes([0x22, 0xF4, 0x46]))
+                self.send(socket, bytes([0x22, 0xF4, 0x46]))
             else:
-                socket.send(bytes([0x01, 0x46]))
+                self.send(socket, bytes([0x01, 0x46]))
 
-            rx_payload = socket.recv()
+            rx_payload = self.recv(socket)
             if self.verbose:
                 if self.mode == 'J1979-2':
                     print(self.dump_msg(rx_payload), '/', rx_payload[3])
@@ -339,28 +375,28 @@ class OBDUtil():
             if self.mode == 'J1979-2':
                 # 7E0  8  03 19 02 0F 00 00 00 00 (SID: 19, SF: 02, mask: 0F)
                 #   02: reportDTCByStatusMask
-                socket.send(bytes([0x19, 0x02, 0xFF]))
-                rx_payload = socket.recv()
+                self.send(socket, bytes([0x19, 0x02, 0xFF]))
+                rx_payload = self.recv(socket)
             else:
                 # Need to use 3 Modes (0x03, 0x07, 0x0A)
                 rx3 = None
                 # UDS Confirmed DTC equivalent
-                socket.send(bytes([0x03,
+                self.send(socket, bytes([0x03,
                                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
-                rx3 = socket.recv()
+                rx3 = self.recv(socket)
                 return rx3
 
                 # TODO: process response
                 # UDS Pending DTC equivalent
                 #rx7 = None
-                #socket.send(bytes([0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
-                #rx7 = socket.recv()
+                #self.send(socket, bytes([0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+                #rx7 = self.recv(socket)
                 # TODO: process response
 
                 # UDS Permanent DTC equivalent
                 #rxa = None
-                #socket.send(bytes([0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
-                #rxa = socket.recv()
+                #self.send(socket, bytes([0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+                #rxa = self.recv(socket)
                 # TODO: process response
 
             if self.verbose:
@@ -387,24 +423,24 @@ class OBDUtil():
         rx_payload = None
         try:
             if self.mode == 'J1979-2':
-                socket.send(bytes([0x19, 0x01, 0xFF]))
-                rx_payload = socket.recv()
+                self.send(socket, bytes([0x19, 0x01, 0xFF]))
+                rx_payload = self.recv(socket)
             else:
                 # mode: 01 pid: 01 returns number of confirmed dtcs and MIL
-                #socket.send(bytes([0x01, 0x01]))
+                #self.send(socket, bytes([0x01, 0x01]))
                 #
                 # J1979 - get confirmed/pending/permanent DTCs:
                 # Mode 0x03/0x07/0x0A
-                socket.send(bytes([0x03]))
-                rx_3 = socket.recv()
+                self.send(socket, bytes([0x03]))
+                rx_3 = self.recv(socket)
                 if self.verbose:
                     print('0x03: ', len(rx_3[1:])/2)
-                #socket.send(bytes([0x07]))
-                rx_7 = bytes([]) #socket.recv()
+                #self.send(socket, bytes([0x07]))
+                rx_7 = bytes([])
                 if self.verbose:
                     print('0x07: ', len(rx_7[1:])/2)
-                #socket.send(bytes([0x0A]))
-                rx_a = bytes([])#socket.recv()
+                #self.send(bytes([0x0A]))
+                rx_a = bytes([])
                 if self.verbose:
                     print('0x0a: ', len(rx_a[1:])/2)
                 num_dtcs = int((len(rx_3[1:]) + len(rx_7[1:])+ len(rx_a[1:]))/2)
@@ -430,6 +466,7 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--mode', default='J1979-2')
     parser.add_argument('--scan', action='store_true')
     parser.add_argument('-d', '--debug', action='store_true')
+    parser.add_argument('-u', '--userland_isotp', action='store_true')
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--ecus', nargs='*', type=lambda x: int(x, 16), default=[0x7E0, 0x7E1, 0x7E2])
     args = parser.parse_args()
@@ -445,6 +482,11 @@ if __name__ == '__main__':
         obdutil.mode = args.mode
         print(f'Running mode: {args.mode}')
 
+    if args.userland_isotp:
+        obdutil.userland_isotp = True
+    print(f'userland_isotp:', obdutil.userland_isotp)
+
+    detected_canids = []
     if args.scan:
         import sys
         print('Checking...: %03X' % (0x7DF))
@@ -453,12 +495,17 @@ if __name__ == '__main__':
             print('Detected: CANID: %03X' % (resp.arbitration_id - 0x8))
         print('')
 
-    socket = isotp.socket()
+        detected_canids = [canmsg.arbitration_id - 0x8 for canmsg in captured_responses]
+        #print([f'{canid:03X}' for canid in detected_canids])
+        #print(detected_canids)
+
     tx_id = 0x7E0
     rx_id = tx_id + 0x8
-    socket.bind(args.interface, isotp.Address(rxid=rx_id, txid=tx_id))
-    #
-    socket.settimeout(10.0)
+    socket = obdutil.get_isotp_socket(interface=args.interface,
+                                      txid=tx_id, rxid=rx_id)
+
+    #socket.settimeout(10.0)
+
     #
     print('Checking...: %03X' % (tx_id))
     # 0x02, 0x7E, 0x00
@@ -541,6 +588,6 @@ if __name__ == '__main__':
         all_dtcs = obdutil.send_get_all_dtcs(s)
         print('ALL DTCs(dump):', obdutil.dump_msg(all_dtcs))
         print('')
-        s.close()
+        obdutil.close(s)
 
-    socket.close()
+    obdutil.close(socket)

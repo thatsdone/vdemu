@@ -9,7 +9,7 @@ DoIP is a future work.
 vdemu consists of 2 components below:
 
 1. responder.py, diagnostics responder (currently on CAN)
-2. obdonuds.py, OBD access client
+2. obdutil.py, OBD access client
 
 
 ## Usage
@@ -39,15 +39,14 @@ options:
   --ecus [ECUS ...]
 ```
 
-### obdonuds.py - client
+### obdutil.py - client
 
 ```
-$ python3 obdonuds.py -h
-usage: obdonuds.py [-h] [--poll_timeout POLL_TIMEOUT] [-i INTERFACE]
-                   [-b BROADCAST] [-m MODE] [--scan] [-d]
-                   [--ecus [ECUS ...]]
+$ python3 obdutil.py -h
+usage: obdutil.py [-h] [--poll_timeout POLL_TIMEOUT] [-i INTERFACE] [-b BROADCAST]
+                  [-m MODE] [--scan] [-d] [-u] [--verbose] [--ecus [ECUS ...]]
 
-obdonuds.py
+obdutil.py
 
 options:
   -h, --help            show this help message and exit
@@ -57,6 +56,8 @@ options:
   -m MODE, --mode MODE
   --scan
   -d, --debug
+  -u, --userland_isotp
+  --verbose
   --ecus [ECUS ...]
 ```
 
