@@ -480,7 +480,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # logging
-    logger = logging.getLogger('DataCollectionAgent')
+    logger = logging.getLogger('vdemu')
     log_level = 'DEBUG' if args.debug else 'INFO'
     logger.setLevel(log_level)
     logger.propagate = False
