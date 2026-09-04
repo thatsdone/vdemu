@@ -80,11 +80,15 @@ class OBDUtil():
         else:
             return socket.recv()
 
-    def get_isotp_socket(self, interface=None, txid=None, rxid=None):
+    def get_isotp_socket(self, interface=None, channel=None,
+                         txid=None, rxid=None):
 
         if self.userland_isotp:
-            self.bus = can.interface.Bus(interface='socketcan',
-                                         channel=interface)
+            if interface == 'udp_multicast':
+                self.bus = can.interface.Bus(interface=interface)
+            else:
+                self.bus = can.interface.Bus(interface=interface,
+                                             channel=channel)
             self.addr = isotp.Address(rxid=rxid, txid=txid)
             return isotp.CanStack(bus=self.bus, address=self.addr)
 
@@ -94,14 +98,19 @@ class OBDUtil():
             rx_id = txid + 0x8
         else:
             rx_id = rxid
-        socket.bind(interface, isotp.Address(rxid=rx_id, txid=tx_id))
+        socket.bind(channel, isotp.Address(rxid=rx_id, txid=tx_id))
         return socket
 
     # OBD routines
-    def scan_obd_protocol(self, interface=None):
+    def scan_obd_protocol(self, interface=None, channel=None):
         self.logger.debug('scan_obd_protocol() called. %s' % (interface))
-        bus = can.interface.Bus(interface='socketcan',
-                            channel=interface, bitrate=500000)
+        bus = None
+        if interface == 'udp_multicast':
+            bus = can.interface.Bus(interface=interface, bitrate=500000)
+        else:
+            bus = can.interface.Bus(interface=interface,
+                                    channel=channel, bitrate=500000)
+
         bus.set_filters([{'can_id': 0x7E8, 'can_mask': 0x7F8,
                           'extended': False}])
         req_data = []
@@ -167,7 +176,7 @@ class OBDUtil():
 
         finally:
             bus.shutdown()
-            return captured_responses
+        return captured_responses
 
     # send_supported_pids()
     #   pid_base: base of PID range. e.g., 0x00, 0x20,...
@@ -183,10 +192,10 @@ class OBDUtil():
             self.send(socket, bytes([0x01, pid_base]))
             rx_payload = self.recv(socket)
             if self.verbose:
-                print(self.dump_msg(rx_payload), '/', 'PIDS_A/..{pid_base:02X}')
+                print(self.dump_msg(rx_payload), '/', f'PIDS_A/..{pid_base:02X}')
         except TimeoutError:
             if self.verbose:
-                print(time.time(), 'timeout: %s %3X' % (args.interface, rx_id))
+                print(time.time(), 'timeout: %s %3X' % (args.can_channel, rx_id))
         # return supported PID bitmap only
         return rx_payload[2:6]
 
@@ -200,7 +209,7 @@ class OBDUtil():
                 print(self.dump_msg(rx_payload), '/', 'Tester Present Positive Response')
         except TimeoutError:
             if self.verbose:
-                print(time.time(), 'timeout: %s %3X' % (args.interface, rx_id))
+                print(time.time(), 'timeout: %s %3X' % (args.can_channel, rx_id))
         return rx_payload
 
     def send_get_vin(self, socket, parse=False):
@@ -216,7 +225,7 @@ class OBDUtil():
                 print(self.dump_msg(rx_payload), '/', rx_payload[3:].decode('utf-8'))
         except TimeoutError:
             if self.verbose:
-                print(time.time(), 'timeout: %s %3X' % (args.interface, rx_id))
+                print(time.time(), 'timeout: %s %3X' % (args.can_channel, rx_id))
                 print(type(rx_payload), rx_payload)
             return None
 
@@ -245,7 +254,7 @@ class OBDUtil():
 
         except TimeoutError:
             if self.verbose:
-                print(time.time(), 'timeout: %s %3X' % (args.interface, rx_id))
+                print(time.time(), 'timeout: %s %3X' % (args.can_channel, rx_id))
             return None
 
         if parse:
@@ -271,7 +280,7 @@ class OBDUtil():
                     print(self.dump_msg(rx_payload), '/', rx_payload[2:].decode('utf-8'))
         except TimeoutError:
             if self.verbose:
-                print(time.time(), 'timeout: %s %3X' % (args.interface, rx_id))
+                print(time.time(), 'timeout: %s %3X' % (args.can_channel, rx_id))
                 print(type(rx_payload), rx_payload)
             return None
 
@@ -300,7 +309,7 @@ class OBDUtil():
 
         except TimeoutError:
             if self.verbose:
-                print(time.time(), 'timeout: %s %3X' % (args.interface, rx_id))
+                print(time.time(), 'timeout: %s %3X' % (args.can_channel, rx_id))
             return None
 
         return rx_payload
@@ -323,7 +332,7 @@ class OBDUtil():
 
         except TimeoutError:
             if self.verbose:
-                print(time.time(), 'timeout: %s %3X' % (args.interface, rx_id))
+                print(time.time(), 'timeout: %s %3X' % (args.can_channel, rx_id))
             return None
 
         return rx_payload
@@ -342,7 +351,7 @@ class OBDUtil():
                 print(self.dump_msg(rx_payload), '/', rx_payload[3] * 100 / 255)
         except TimeoutError:
             if self.verbose:
-                print(time.time(), 'timeout: %s %3X' % (args.interface, rx_id))
+                print(time.time(), 'timeout: %s %3X' % (args.can_channel, rx_id))
             return None
 
         return rx_payload
@@ -364,7 +373,7 @@ class OBDUtil():
                     print(self.dump_msg(rx_payload), '/', rx_payload[2])
         except TimeoutError:
             if self.verbose:
-                print(time.time(), 'timeout: %s %3X' % (args.interface, rx_id))
+                print(time.time(), 'timeout: %s %3X' % (args.can_channel, rx_id))
             return None
 
         return rx_payload
@@ -413,7 +422,7 @@ class OBDUtil():
 
         except TimeoutError:
             if self.verbose:
-                print(time.time(), 'timeout: %s %3X' % (args.interface, rx_id))
+                print(time.time(), 'timeout: %s %3X' % (args.can_channel, rx_id))
                 print(type(rx_payload), rx_payload)
             return None
 
@@ -452,7 +461,7 @@ class OBDUtil():
                     print(self.dump_msg(rx_payload), '/', '%d DTCs' % (int.from_bytes(rx_payload[4:6], byteorder='big')))
         except TimeoutError:
             if self.verbose:
-                print(time.time(), 'timeout: %s %3X' % (args.interface, rx_id))
+                print(time.time(), 'timeout: %s %3X' % (args.can_channel, rx_id))
             return None
 
         return rx_payload
@@ -461,7 +470,8 @@ class OBDUtil():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='obdutil.py')
     parser.add_argument('--poll_timeout', type=float, default=0.1)
-    parser.add_argument('-i', '--interface', default='vcan0')
+    parser.add_argument('-I', '--can_interface', default='socketcan')
+    parser.add_argument('-C', '--can_channel', default='vcan0')
     parser.add_argument('-b', '--broadcast', default=0x7DF)
     parser.add_argument('-m', '--mode', default='J1979-2')
     parser.add_argument('--scan', action='store_true')
@@ -490,7 +500,7 @@ if __name__ == '__main__':
     if args.scan:
         import sys
         print('Checking...: %03X' % (0x7DF))
-        captured_responses = obdutil.scan_obd_protocol(args.interface)
+        captured_responses = obdutil.scan_obd_protocol(interface=args.can_interface, channel=args.can_channel)
         for resp in captured_responses:
             print('Detected: CANID: %03X' % (resp.arbitration_id - 0x8))
         print('')
@@ -501,7 +511,8 @@ if __name__ == '__main__':
 
     tx_id = 0x7E0
     rx_id = tx_id + 0x8
-    socket = obdutil.get_isotp_socket(interface=args.interface,
+    socket = obdutil.get_isotp_socket(interface=args.can_interface,
+                                      channel=args.can_channel,
                                       txid=tx_id, rxid=rx_id)
 
     #socket.settimeout(10.0)
@@ -563,7 +574,8 @@ if __name__ == '__main__':
 
     for canid in args.ecus[1:]:
         print('Checking...: %03X' % (canid))
-        s = obdutil.get_isotp_socket(interface=args.interface,
+        s = obdutil.get_isotp_socket(interface=args.can_interface,
+                                     channel=args.can_channel,
                                      txid=canid, rxid=canid + 0x8)
         ecu_name = obdutil.send_get_ecu_name(s, parse=True)
         print('ECU_NAME:', ecu_name)

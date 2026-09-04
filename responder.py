@@ -25,6 +25,8 @@ args = None
 global logger
 logger = None
 
+import obdutil
+
 default_pidlist = [0x01, 0x0C, 0x0D, 0x11, 0x46]
 
 def pid_bitmap(pid):
@@ -90,12 +92,18 @@ def check_mode(isotp_payload):
         return -1
 
 
-def serve_functional():
+def serve_functional(interface, channel):
     logger.debug('started.')
 
-    bus = can.interface.Bus(interface='socketcan',
-                            channel=args.interface,
-                            bitrate=500000)
+    bus = None
+    # For Windows
+    if interface == 'udp_multicast':
+        bus = can.interface.Bus(interface=interface)
+
+    else:
+        bus = can.interface.Bus(interface=interface,
+                                channel=channel,
+                                bitrate=500000)
 
     bus.set_filters([{'can_id': 0x7DF,
                       'can_mask': 0x7F8,
@@ -111,6 +119,7 @@ def serve_functional():
             if not rx_msg:
                 # mostly timeout case.
                 continue
+
             else:
                 check_mode(rx_msg.data[1:])
             count += 1
@@ -199,20 +208,32 @@ def serve_functional():
         bus.shutdown()
 
 
-def serve_ecu(interface, rx_id):
+def serve_ecu(interface, channel, rx_id):
     logger.debug('%s: can_id: %X %s' % (interface, rx_id, vehicle_data['vehicle']['ecus'][rx_id]['ecu_name']))
 
-    socket = isotp.socket()
-    socket.bind(interface, isotp.Address(rxid=rx_id, txid=rx_id + 0x8))
+    socket = None
+    bus = None
+    outil = obdutil.OBDUtil()
+    outil.userland_isotp = args.userland_isotp
+    socket = outil.get_isotp_socket(interface=interface,
+                                    channel=channel,
+                                    txid=rx_id + 0x8, rxid=rx_id)
+    if interface == 'socketcan':
+        socket.settimeout(10.0)
 
-    socket.settimeout(10.0)
+    elif interface == 'udp_multicast':
+        channel = None # dummy for logging
+        # TODO: set timeout
+
     try:
         while True:
             try:
-                rx_payload = socket.recv()
+                rx_payload = outil.recv(socket, timeout=10.0)
+                if not rx_payload:
+                    continue
 
                 msg = ' '.join('%02X' % rx_payload[idx] for idx in range(0, len(rx_payload)))
-                logger.info('isotp: %-7s %3X [%d] %s' % (interface, rx_id, len(rx_payload), msg))
+                logger.info('isotp: %-7s %3X [%d] %s' % (channel, rx_id, len(rx_payload), msg))
 
                 # check J1979/J1979-2 consistency
                 action = check_mode(rx_payload)
@@ -461,7 +482,10 @@ def serve_ecu(interface, rx_id):
         logger.error(f'Exeption: {e}')
     finally:
         logger.debug('closing isotp socket')
-        socket.close()
+        if args.can_interface == 'socketcan':
+            socket.close()
+        else:
+            socket.shutdown()
 
 
 
@@ -471,7 +495,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='responer.py')
     parser.add_argument('-c', '--config',default='vehicle.yaml')
     parser.add_argument('--poll_timeout', type=float, default=10.0)
-    parser.add_argument('-i', '--interface', default='vcan0')
+    parser.add_argument('-I', '--can_interface', default='socketcan')
+    parser.add_argument('-C', '--can_channel', default='vcan0')
+    parser.add_argument('--userland_isotp', action='store_true')
     parser.add_argument('-b', '--broadcast', default=0x7DF)
     parser.add_argument('-m', '--mode', default='J1979-2')
     parser.add_argument('-d', '--debug', action='store_true')
@@ -507,13 +533,14 @@ if __name__ == '__main__':
     if args.debug and args.verbose:
         logger.debug(pprint.pformat(vehicle_data))
 
-    th_functional = threading.Thread(target=serve_functional, args=())
+    th_functional = threading.Thread(target=serve_functional,
+                                     args=(args.can_interface, args.can_channel,))
     th_functional.start()
 
     th_unicasts = list()
     for ecu in args.ecus:
         th_unicast = threading.Thread(target=serve_ecu,
-                                      args=(args.interface, ecu, ))
+                                      args=(args.can_interface, args.can_channel, ecu, ))
         th_unicast.start()
 
     th_functional.join()
