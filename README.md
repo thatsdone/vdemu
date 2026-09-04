@@ -11,19 +11,30 @@ vdemu consists of 2 components below:
 1. responder.py, diagnostics responder (currently on CAN)
 2. obdutil.py, OBD access client
 
+Supported platforms:
+* Linux
+  * vdemu uses Linux SocketCAN including ISOTP,
+    both CAN_ISOTP enabled / disabled kernels are supported.
+  * Use `--userland_isotp` for CAN_ISOTP disabled kernel.
+* Windows (WSL2 environment)
+  * The same with native Linux except that default WSL2 kernel does not configure VCAN.
+* Windows (Non-WSL2 environment) without any CAN devices/drivers
+  * Use `--can_interface udp_multicast` and `--userland_isotp`
 
 ## Usage
 
-'responder.py' takes a configuration file which enables to define
-a vehicle consists of multiple ECUs.
-
 ### responder.py - server
 
+'responder.py' takes a configuration file optionally enablling
+to define a vehicle consists of multiple ECUs.
+Default filename is 'vehicle.yaml'. No need to care about `databse:` section for now.
+The below options can be configured by the configuration file.
+
 ```
-$ python3 responder.py -h
+$ python responder.py -h
 usage: responder.py [-h] [-c CONFIG] [--poll_timeout POLL_TIMEOUT]
-                    [-i INTERFACE] [-b BROADCAST] [-m MODE] [-d] [--verbose]
-                    [--ecus [ECUS ...]]
+                    [-I CAN_INTERFACE] [-C CAN_CHANNEL] [--userland_isotp]
+                    [-b BROADCAST] [-m MODE] [-d] [--verbose] [--ecus [ECUS ...]]
 
 responer.py
 
@@ -31,7 +42,9 @@ options:
   -h, --help            show this help message and exit
   -c CONFIG, --config CONFIG
   --poll_timeout POLL_TIMEOUT
-  -i INTERFACE, --interface INTERFACE
+  -I CAN_INTERFACE, --can_interface CAN_INTERFACE
+  -C CAN_CHANNEL, --can_channel CAN_CHANNEL
+  --userland_isotp
   -b BROADCAST, --broadcast BROADCAST
   -m MODE, --mode MODE
   -d, --debug
@@ -42,16 +55,18 @@ options:
 ### obdutil.py - client
 
 ```
-$ python3 obdutil.py -h
-usage: obdutil.py [-h] [--poll_timeout POLL_TIMEOUT] [-i INTERFACE] [-b BROADCAST]
-                  [-m MODE] [--scan] [-d] [-u] [--verbose] [--ecus [ECUS ...]]
+$ python obdutil.py -h
+usage: obdutil.py [-h] [--poll_timeout POLL_TIMEOUT] [-I CAN_INTERFACE]
+                  [-C CAN_CHANNEL] [-b BROADCAST] [-m MODE] [--scan] [-d] [-u]
+                  [--verbose] [--ecus [ECUS ...]]
 
 obdutil.py
 
 options:
   -h, --help            show this help message and exit
   --poll_timeout POLL_TIMEOUT
-  -i INTERFACE, --interface INTERFACE
+  -I CAN_INTERFACE, --can_interface CAN_INTERFACE
+  -C CAN_CHANNEL, --can_channel CAN_CHANNEL
   -b BROADCAST, --broadcast BROADCAST
   -m MODE, --mode MODE
   --scan
@@ -68,7 +83,6 @@ Apache License, Version 2.0
 Masanori Itoh <masanori.itoh@gmail.com>
 
 ## TODO
-* Update this README.md
 * Support more SIDs, DIDs, DTCs and OBD/UDS features
 * Support DoIP
 
