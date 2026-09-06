@@ -540,6 +540,10 @@ if __name__ == '__main__':
     if args.debug and args.verbose:
         logger.debug(pprint.pformat(vehicle_data))
 
+    import restapi
+    th_rest = threading.Thread(target=restapi.run_api_server, daemon=True)
+    th_rest.start()
+
     th_functional = threading.Thread(target=serve_functional,
                                      args=(args.can_interface,
                                            args.can_channel,
@@ -558,3 +562,4 @@ if __name__ == '__main__':
     th_functional.join()
     for th in th_unicasts:
         th.join()
+    th_rest.join()
