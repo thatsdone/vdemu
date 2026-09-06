@@ -80,12 +80,16 @@ class OBDUtil():
         else:
             return socket.recv()
 
-    def get_isotp_socket(self, interface=None, channel=None,
+    def get_isotp_socket(self, interface=None, channel=None, app_name=None,
                          txid=None, rxid=None):
 
         if self.userland_isotp:
             if interface == 'udp_multicast':
                 self.bus = can.interface.Bus(interface=interface)
+            elif interface == 'vector':
+                self.bus = can.interface.Bus(interface=interface,
+                                             channel=int(channel),
+                                             app_name=app_name)
             else:
                 self.bus = can.interface.Bus(interface=interface,
                                              channel=channel)
@@ -102,11 +106,15 @@ class OBDUtil():
         return socket
 
     # OBD routines
-    def scan_obd_protocol(self, interface=None, channel=None):
+    def scan_obd_protocol(self, interface=None, channel=None, app_name=None):
         self.logger.debug('scan_obd_protocol() called. %s' % (interface))
         bus = None
         if interface == 'udp_multicast':
             bus = can.interface.Bus(interface=interface, bitrate=500000)
+        elif interface == 'vector':
+            bus = can.interface.Bus(interface=interface,
+                                    app_name=app_name,
+                                    channel=int(channel))
         else:
             bus = can.interface.Bus(interface=interface,
                                     channel=channel, bitrate=500000)
@@ -472,6 +480,7 @@ if __name__ == '__main__':
     parser.add_argument('--poll_timeout', type=float, default=0.1)
     parser.add_argument('-I', '--can_interface', default='socketcan')
     parser.add_argument('-C', '--can_channel', default='vcan0')
+    parser.add_argument('--app_name', default='python-can')
     parser.add_argument('-b', '--broadcast', default=0x7DF)
     parser.add_argument('-m', '--mode', default='J1979-2')
     parser.add_argument('--scan', action='store_true')
@@ -500,7 +509,11 @@ if __name__ == '__main__':
     if args.scan:
         import sys
         print('Checking...: %03X' % (0x7DF))
-        captured_responses = obdutil.scan_obd_protocol(interface=args.can_interface, channel=args.can_channel)
+        captured_responses = obdutil.scan_obd_protocol(
+            interface=args.can_interface,
+            channel=args.can_channel,
+            app_name = args.app_name
+        )
         for resp in captured_responses:
             print('Detected: CANID: %03X' % (resp.arbitration_id - 0x8))
         print('')
@@ -513,6 +526,7 @@ if __name__ == '__main__':
     rx_id = tx_id + 0x8
     socket = obdutil.get_isotp_socket(interface=args.can_interface,
                                       channel=args.can_channel,
+                                      app_name = args.app_name,
                                       txid=tx_id, rxid=rx_id)
 
     #socket.settimeout(10.0)

@@ -92,13 +92,18 @@ def check_mode(isotp_payload):
         return -1
 
 
-def serve_functional(interface, channel):
+def serve_functional(interface, channel, app_name):
     logger.debug('started.')
 
     bus = None
     # For Windows
     if interface == 'udp_multicast':
         bus = can.interface.Bus(interface=interface)
+
+    elif interface == 'vector':
+        bus = can.interface.Bus(interface=interface,
+                                app_name=app_name,
+                                channel=int(channel))
 
     else:
         bus = can.interface.Bus(interface=interface,
@@ -208,7 +213,7 @@ def serve_functional(interface, channel):
         bus.shutdown()
 
 
-def serve_ecu(interface, channel, rx_id):
+def serve_ecu(interface, channel, app_name, rx_id):
     logger.debug('%s: can_id: %X %s' % (interface, rx_id, vehicle_data['vehicle']['ecus'][rx_id]['ecu_name']))
 
     socket = None
@@ -217,6 +222,7 @@ def serve_ecu(interface, channel, rx_id):
     outil.userland_isotp = args.userland_isotp
     socket = outil.get_isotp_socket(interface=interface,
                                     channel=channel,
+                                    app_name=app_name,
                                     txid=rx_id + 0x8, rxid=rx_id)
     if interface == 'socketcan':
         socket.settimeout(10.0)
@@ -497,6 +503,7 @@ if __name__ == '__main__':
     parser.add_argument('--poll_timeout', type=float, default=10.0)
     parser.add_argument('-I', '--can_interface', default='socketcan')
     parser.add_argument('-C', '--can_channel', default='vcan0')
+    parser.add_argument('--app_name', default='python-can')
     parser.add_argument('--userland_isotp', action='store_true')
     parser.add_argument('-b', '--broadcast', default=0x7DF)
     parser.add_argument('-m', '--mode', default='J1979-2')
@@ -534,13 +541,18 @@ if __name__ == '__main__':
         logger.debug(pprint.pformat(vehicle_data))
 
     th_functional = threading.Thread(target=serve_functional,
-                                     args=(args.can_interface, args.can_channel,))
+                                     args=(args.can_interface,
+                                           args.can_channel,
+                                           args.app_name, ))
     th_functional.start()
 
     th_unicasts = list()
     for ecu in args.ecus:
         th_unicast = threading.Thread(target=serve_ecu,
-                                      args=(args.can_interface, args.can_channel, ecu, ))
+                                      args=(args.can_interface,
+                                            args.can_channel,
+                                            args.app_name,
+                                            ecu, ))
         th_unicast.start()
 
     th_functional.join()
