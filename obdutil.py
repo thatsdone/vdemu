@@ -105,9 +105,10 @@ class OBDUtil():
         socket.bind(channel, isotp.Address(rxid=rx_id, txid=tx_id))
         return socket
 
-    # OBD routines
-    def scan_obd_protocol(self, interface=None, channel=None, app_name=None):
-        self.logger.debug('scan_obd_protocol() called. %s' % (interface))
+    # return 'bus' of socketcan without isotp
+    def get_can_socket(self, interface=None, channel=None, appname=None):
+
+        self.logger.debug('get_can_socket() called. %s' % (interface))
         bus = None
         if interface == 'udp_multicast':
             bus = can.interface.Bus(interface=interface, bitrate=500000)
@@ -121,6 +122,27 @@ class OBDUtil():
 
         bus.set_filters([{'can_id': 0x7E8, 'can_mask': 0x7F8,
                           'extended': False}])
+        return bus
+
+    # OBD routines
+    def scan_obd_protocol(self, interface=None, channel=None, app_name=None):
+        #self.logger.debug('scan_obd_protocol() called. %s' % (interface))
+        #bus = None
+        #if interface == 'udp_multicast':
+        #    bus = can.interface.Bus(interface=interface, bitrate=500000)
+        #elif interface == 'vector':
+        #    bus = can.interface.Bus(interface=interface,
+        #                            app_name=app_name,
+        #                            channel=int(channel))
+        #else:
+        #    bus = can.interface.Bus(interface=interface,
+        #                            channel=channel, bitrate=500000)
+        #
+        #
+        #bus.set_filters([{'can_id': 0x7E8, 'can_mask': 0x7F8,
+        #                  'extended': False}])
+        bus = self.get_can_socket(interface, channel, app_name)
+
         req_data = []
         if self.mode == 'J1979-2':
             # J1979-2 (OBD on UDS) can be checked
