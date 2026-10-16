@@ -224,7 +224,7 @@ def serve_ecu(interface, channel, app_name, rx_id):
                                     channel=channel,
                                     app_name=app_name,
                                     txid=rx_id + 0x8, rxid=rx_id)
-    if interface == 'socketcan':
+    if interface == 'socketcan' and not outil.userland_isotp:
         socket.settimeout(10.0)
 
     elif interface == 'udp_multicast':
