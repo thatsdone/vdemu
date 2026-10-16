@@ -29,6 +29,7 @@ class OBDUtil():
     verbose = False
     mode = 'J1979'
     userland_isotp = False
+    stmin = 0
 
     def __init__(self):
         self.logger = logging.getLogger()
@@ -82,6 +83,9 @@ class OBDUtil():
 
     def get_isotp_socket(self, interface=None, channel=None, app_name=None,
                          txid=None, rxid=None):
+        isotp_params = {
+            'stmin': self.stmin
+        }
 
         if self.userland_isotp:
             if interface == 'udp_multicast':
@@ -94,7 +98,8 @@ class OBDUtil():
                 self.bus = can.interface.Bus(interface=interface,
                                              channel=channel)
             self.addr = isotp.Address(rxid=rxid, txid=txid)
-            return isotp.CanStack(bus=self.bus, address=self.addr)
+            return isotp.CanStack(bus=self.bus, address=self.addr,
+                                  params=isotp_params)
 
         socket = isotp.socket()
         tx_id = txid
@@ -486,12 +491,14 @@ if __name__ == '__main__':
     parser.add_argument('--scan', action='store_true')
     parser.add_argument('-d', '--debug', action='store_true')
     parser.add_argument('-u', '--userland_isotp', action='store_true')
+    parser.add_argument('--isotp_stmin', type=int, default=0)
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--ecus', nargs='*', type=lambda x: int(x, 16), default=[0x7E0, 0x7E1, 0x7E2])
     args = parser.parse_args()
 
     obdutil = OBDUtil()
     obdutil.verbose = args.verbose
+    obdutil.stmin = args.isotp_stmin
     captured_responses = {}
 
     if not args.mode in ['J1979-2', 'J1979']:
@@ -527,7 +534,8 @@ if __name__ == '__main__':
     socket = obdutil.get_isotp_socket(interface=args.can_interface,
                                       channel=args.can_channel,
                                       app_name = args.app_name,
-                                      txid=tx_id, rxid=rx_id)
+                                      txid=tx_id, rxid=rx_id,
+                                      )
 
     #socket.settimeout(10.0)
 

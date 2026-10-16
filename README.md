@@ -23,6 +23,9 @@ Supported platforms:
 
 ## Usage
 
+Note that CAN_INTERFACE (-I) below is 'socketcan' for example.
+Use CAN_CHANNEL (-C) to specify 'vcan0' for example.
+
 ### responder.py - server
 
 'responder.py' takes a configuration file optionally enablling
@@ -57,8 +60,9 @@ options:
 ```
 $ python obdutil.py -h
 usage: obdutil.py [-h] [--poll_timeout POLL_TIMEOUT] [-I CAN_INTERFACE]
-                  [-C CAN_CHANNEL] [-b BROADCAST] [-m MODE] [--scan] [-d] [-u]
-                  [--verbose] [--ecus [ECUS ...]]
+                  [-C CAN_CHANNEL] [--app_name APP_NAME] [-b BROADCAST] [-m MODE]
+                  [--scan] [-d] [-u] [--isotp_stmin ISOTP_STMIN] [--verbose]
+                  [--ecus [ECUS ...]]
 
 obdutil.py
 
@@ -67,11 +71,13 @@ options:
   --poll_timeout POLL_TIMEOUT
   -I CAN_INTERFACE, --can_interface CAN_INTERFACE
   -C CAN_CHANNEL, --can_channel CAN_CHANNEL
+  --app_name APP_NAME
   -b BROADCAST, --broadcast BROADCAST
   -m MODE, --mode MODE
   --scan
   -d, --debug
   -u, --userland_isotp
+  --isotp_stmin ISOTP_STMIN
   --verbose
   --ecus [ECUS ...]
 ```
